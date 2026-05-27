@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+httpx
+google-auth
+python-multipart
+websockets
+wsproto

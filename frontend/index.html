@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("cipherline-theme") || "dark";
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      } catch (e) {}
+    })();
+  </script>
+  <title>VyChat
+  </title>
+  <link rel="icon" type="image/x-icon" href="/static/Vy_icon_blue_transparent.ico">
+  <link rel="shortcut icon" type="image/x-icon" href="/static/Vy_icon_blue_transparent.ico">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="page-shell app-layout">
+    <div class="orb orb-left"></div>
+    <div class="orb orb-right"></div>
+
+    <aside class="sidebar-panel">
+      <div class="panel-topbar">
+        <div>
+          <p class="eyebrow">Encrypted Server Chat</p>
+          <h1>VyChat</h1>
+        </div>
+        <button id="themeToggle" type="button" class="theme-toggle" aria-label="Toggle color theme">
+          <span class="theme-toggle__icon" aria-hidden="true">D</span>
+          <span id="themeToggleLabel">Dark mode</span>
+        </button>
+      </div>
+
+      <section class="card auth-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Account</p>
+            <h2 id="accountTitle">Sign in</h2>
+          </div>
+          <button id="logoutButton" type="button" class="ghost compact hidden">Logout</button>
+        </div>
+
+        <p id="authStatus" class="helper-text">Create an account or log in to access your servers.</p>
+
+        <div id="authTabs" class="tab-row">
+          <button id="showLoginButton" type="button" class="tab-button active">Login</button>
+          <button id="showRegisterButton" type="button" class="tab-button">Register</button>
+        </div>
+
+        <form id="authForm" class="stack" autocomplete="off">
+          <label>
+            <span>Username</span>
+            <input id="authUsernameInput" type="text" placeholder="e.g. viko" maxlength="24" required>
+          </label>
+
+          <label>
+            <span>Password</span>
+            <input id="authPasswordInput" type="password" placeholder="At least 6 characters" required>
+          </label>
+
+          <button id="authSubmitButton" type="submit">Login</button>
+        </form>
+
+        <div id="accountSummary" class="account-summary hidden">
+          <p class="status-label">Logged in as</p>
+          <p id="accountUsername" class="status-value online">-</p>
+        </div>
+      </section>
+
+      <section class="card transport-card">
+        <div class="section-heading tight">
+          <div>
+            <p class="eyebrow">Transport</p>
+            <h2>Socket settings</h2>
+          </div>
+        </div>
+
+        <div class="stack">
+          <label>
+            <span>Shared transport key</span>
+            <input id="secretInput" type="password" placeholder="Same as CHAT_SECRET_KEY">
+          </label>
+
+          <label>
+            <span>WebSocket endpoint</span>
+            <input id="serverInput" type="text" placeholder="ws://127.0.0.1:8000/ws">
+          </label>
+        </div>
+      </section>
+
+      <section class="card server-card">
+        <div class="section-heading tight">
+          <div>
+            <p class="eyebrow">Servers</p>
+            <h2>Your spaces</h2>
+          </div>
+        </div>
+
+        <form id="createServerForm" class="stack inline-form" autocomplete="off">
+          <input id="serverNameInput" type="text" placeholder="New server name" maxlength="48">
+          <button id="createServerButton" type="submit">Create</button>
+        </form>
+
+        <div id="joinedServers" class="server-list"></div>
+      </section>
+
+      <section class="card discover-card">
+        <div class="section-heading tight">
+          <div>
+            <p class="eyebrow">Discover</p>
+            <h2>Available servers</h2>
+          </div>
+        </div>
+
+        <div id="discoverServers" class="server-list muted-list"></div>
+      </section>
+    </aside>
+
+    <main class="chat-panel wide-chat">
+      <header class="chat-header">
+        <div>
+          <p class="eyebrow">Active server</p>
+          <h2 id="activeServerName">No server selected</h2>
+        </div>
+        <div class="header-actions">
+          <div class="header-chip" id="memberCountChip">0 members</div>
+          <div class="header-chip subtle" id="socketStatusChip">Offline</div>
+        </div>
+      </header>
+
+      <section class="chat-body">
+        <aside class="members-panel">
+          <p class="eyebrow">Members</p>
+          <div id="membersList" class="members-list"></div>
+        </aside>
+
+        <section id="messages" class="message-list" aria-live="polite"></section>
+      </section>
+
+      <form id="composerForm" class="composer" autocomplete="off">
+        <label class="composer-label" for="messageInput">Message</label>
+        <div class="composer-row">
+          <textarea id="messageInput" rows="2" placeholder="Select a server and write a message" disabled></textarea>
+          <button id="sendButton" type="submit" disabled>Send</button>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script src="/script.js"></script>
+</body>
+</html>
+
+

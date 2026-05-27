@@ -1,0 +1,17 @@
+{
+  "name": "VyChat",
+  "short_name": "VyChat",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

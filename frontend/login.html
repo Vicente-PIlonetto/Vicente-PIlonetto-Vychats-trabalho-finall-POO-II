@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("cipherline-theme") || "dark";
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      } catch (e) {}
+    })();
+  </script>
+  <title data-i18n="page_title_login">VyChat Login</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="VyChat">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="icon" type="image/x-icon" href="/static/Vy_icon_blue_transparent.ico">
+  <link rel="shortcut icon" type="image/x-icon" href="/static/Vy_icon_blue_transparent.ico">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="orb orb-left"></div>
+    <div class="orb orb-right"></div>
+
+    <main class="login-layout">
+      <section class="login-card">
+        <div class="panel-topbar">
+          <div>
+            <p class="eyebrow" data-i18n="eyebrow_encrypted_server_chat">Encrypted Server Chat</p>
+            <h1 data-i18n="app_name">VyChat</h1>
+          </div>
+          <div class="topbar-actions">
+            <button id="languageToggle" type="button" class="theme-toggle" aria-label="Switch language" title="Switch language">EN</button>
+            <button id="themeToggle" type="button" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+              <span id="themeToggleIcon" class="theme-icon">D</span>
+            </button>
+          </div>
+        </div>
+
+        <p class="helper-text" data-i18n="helper_login_intro">Create an account or log in to manage your servers and open server-specific chats.</p>
+
+        <div class="tab-row">
+          <button id="showLoginButton" type="button" class="tab-button active" data-i18n="tab_login">Login</button>
+          <button id="showRegisterButton" type="button" class="tab-button" data-i18n="tab_register">Register</button>
+        </div>
+
+        <form id="authForm" class="stack" autocomplete="off">
+          <label>
+            <span data-i18n="label_username">Username</span>
+            <input id="authUsernameInput" type="text" minlength="3" maxlength="24" placeholder="Ex. viko" data-i18n-placeholder="placeholder_username" required>
+          </label>
+          <label>
+            <span data-i18n="label_password">Password</span>
+            <input id="authPasswordInput" type="password" minlength="6" placeholder="At least 6 characters" data-i18n-placeholder="placeholder_password" required>
+          </label>
+          <label id="confirmPasswordGroup" class="hidden">
+            <span data-i18n="label_confirm_password">Confirm password</span>
+            <input id="authConfirmPasswordInput" type="password" minlength="6" placeholder="Repeat your password" data-i18n-placeholder="placeholder_confirm_password">
+          </label>
+          <button id="authSubmitButton" type="submit" class="primary" data-i18n="button_login">Login</button>
+        </form>
+
+        <div id="googleAuthSection" class="stack hidden">
+          <div class="divider"><span>or</span></div>
+          <div id="googleAuthButton"></div>
+        </div>
+
+        <p id="authStatus" class="helper-text" data-i18n="helper_login_status">Use your account to continue. Users are stored in `backend/data/store.json`.</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="/static/login.js"></script>
+</body>
+</html>
+
+

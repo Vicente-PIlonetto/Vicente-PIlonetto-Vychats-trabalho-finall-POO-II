@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("cipherline-theme") || "dark";
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      } catch (e) {}
+    })();
+  </script>
+  <title data-i18n="heading_friends">Friends</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="VyChat">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="icon" type="image/x-icon" href="/static/Vy_icon_blue_transparent.ico">
+  <link rel="shortcut icon" type="image/x-icon" href="/static/Vy_icon_blue_transparent.ico">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="orb orb-left"></div>
+    <div class="orb orb-right"></div>
+    <button id="mobileSidebarButton" type="button" class="mobile-sidebar-button" aria-label="Open menu" title="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" aria-hidden="true">
+        <path d="M4 6h16M4 12h16M4 18h16"></path>
+      </svg>
+    </button>
+    <div id="sidebarOverlay" class="sidebar-overlay" aria-hidden="true"></div>
+
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="panel-topbar">
+          <div>
+            <p class="eyebrow" data-i18n="eyebrow_control_panel">Control Panel</p>
+            <h1 data-i18n="app_name">VyChat</h1>
+          </div>
+          <div class="topbar-actions">
+            <button id="sidebarToggle" type="button" class="theme-toggle" aria-label="Toggle sidebar" title="Toggle sidebar">&lt;&lt;</button>
+          </div>
+        </div>
+
+        <div class="account-box compact-account">
+          <p class="eyebrow" data-i18n="eyebrow_account">Account</p>
+          <div class="account-avatar-row">
+            <img id="sidebarAvatar" class="account-avatar hidden" alt="User avatar">
+            <div id="sidebarAvatarFallback" class="account-avatar-fallback">?</div>
+            <p id="sidebarUsername" class="account-username">-</p>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <a href="/servers" class="nav-link" data-nav="servers">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                <rect x="4" y="4" width="16" height="6" rx="2"></rect>
+                <rect x="4" y="14" width="16" height="6" rx="2"></rect>
+              </svg>
+            </span>
+            <span class="nav-label" data-i18n="eyebrow_servers">Servers</span>
+          </a>
+          <a href="/dms" class="nav-link" data-nav="dms">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                <path d="M4 6h16v9H8l-4 3V6z"></path>
+              </svg>
+            </span>
+            <span class="nav-label" data-i18n="nav_direct_messages">DMs</span>
+          </a>
+          <a href="/friends" class="nav-link" data-nav="friends">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                <path d="M16 11a4 4 0 1 0-8 0"></path>
+                <path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6"></path>
+              </svg>
+            </span>
+            <span class="nav-label" data-i18n="nav_friends">Friends</span>
+          </a>
+          <a href="/settings" class="nav-link" data-nav="settings">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .33 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .3 1.7 1.7 0 0 0-.8 1.45V21a2 2 0 1 1-4 0v-.08a1.7 1.7 0 0 0-.8-1.45 1.7 1.7 0 0 0-1-.3 1.7 1.7 0 0 0-1.87.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.3-1 1.7 1.7 0 0 0-1.45-.8H2a2 2 0 1 1 0-4h.08a1.7 1.7 0 0 0 1.45-.8 1.7 1.7 0 0 0 .3-1 1.7 1.7 0 0 0-.33-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.3 1.7 1.7 0 0 0 .8-1.45V2a2 2 0 1 1 4 0v.08a1.7 1.7 0 0 0 .8 1.45 1.7 1.7 0 0 0 1 .3 1.7 1.7 0 0 0 1.87-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.2.3.3.65.3 1s-.1.7-.3 1z"></path>
+              </svg>
+            </span>
+            <span class="nav-label" data-i18n="nav_settings">Settings</span>
+          </a>
+        </nav>
+
+        <div class="card sidebar-collapsible">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="eyebrow_session">Session</p>
+              <h3 data-i18n="heading_actions">Actions</h3>
+            </div>
+          </div>
+          <div class="stack">
+            <label>
+              <span data-i18n="label_status">Status</span>
+              <select id="sidebarStatusMode">
+                <option value="online" data-i18n="state_status_online">Online</option>
+                <option value="offline" data-i18n="state_status_offline">Offline</option>
+                <option value="dnd" data-i18n="state_status_dnd">Do not disturb</option>
+                <option value="meeting" data-i18n="state_status_meeting">In a meeting</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="label_custom_status">Custom status</span>
+              <input id="sidebarStatusText" type="text" maxlength="48">
+            </label>
+          </div>
+          <button id="logoutButton" type="button" class="ghost logout-button">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" aria-hidden="true">
+              <path d="M16 17l5-5-5-5"></path>
+              <path d="M21 12H9"></path>
+              <path d="M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"></path>
+            </svg>
+            <span data-i18n="button_logout">Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <section class="section-block">
+          <div class="header-row">
+            <div>
+              <p class="eyebrow" data-i18n="heading_friends">Friends</p>
+              <h2 data-i18n="heading_friends">Friends</h2>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="heading_add_friend">Add friend</p>
+              <h3 data-i18n="heading_add_friend">Add friend</h3>
+            </div>
+          </div>
+          <form id="addFriendForm" class="inline-form" autocomplete="off">
+            <input id="friendUsernameInput" type="text" maxlength="24" placeholder="Username" data-i18n-placeholder="placeholder_friend_username">
+            <button type="submit" class="primary" data-i18n="button_add_friend">Add friend</button>
+          </form>
+          <p id="addFriendError" class="form-error hidden"></p>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="heading_friend_invites">Friend invites</p>
+              <h3 data-i18n="heading_friend_invites">Friend invites</h3>
+            </div>
+          </div>
+          <div class="inline-form">
+            <input id="inviteCodeInput" type="text" maxlength="24" placeholder="CODE">
+            <button id="acceptInviteButton" type="button" class="ghost" data-i18n="button_accept">Accept</button>
+          </div>
+          <div class="inline-form">
+            <button id="createInviteButton" type="button" class="ghost" data-i18n="button_create_invite">Create invite</button>
+            <div id="inviteCodeOutput" class="invite-url hidden"></div>
+            <button id="copyInviteCodeButton" type="button" class="ghost hidden" data-i18n="button_copy_link">Copy link</button>
+          </div>
+          <div id="inviteList" class="stack"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="heading_friend_requests">Friend requests</p>
+              <h3 data-i18n="heading_friend_requests">Friend requests</h3>
+            </div>
+          </div>
+          <div id="incomingRequests" class="stack"></div>
+          <div id="outgoingRequests" class="stack"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="heading_friends">Friends</p>
+              <h3 data-i18n="heading_friends">Friends</h3>
+            </div>
+          </div>
+          <div id="friendsList" class="members-list"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script src="/static/friends.js"></script>
+</body>
+</html>
+
+
