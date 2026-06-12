@@ -1,0 +1,29 @@
+{
+  "users": [
+    {
+      "id": "be2d3c60-c8fe-4c46-a9a4-f7bf857924c4",
+      "username": "viko",
+      "normalized_username": "viko",
+      "password_hash": "120000$zaO6hV11hxGc+hjpCoRKvQ==$5svHIo8wY9TvAic6w8wxEDGOr/gZyY7ZagIL5D+SDAE=",
+      "display_name": "viko",
+      "status_mode": "online",
+      "status_text": "",
+      "created_at": "2026-05-27T23:33:55.974456+00:00"
+    }
+  ],
+  "servers": [],
+  "sessions": [
+    {
+      "token": "vOFlNqJI6qXR1wNOH59YA7g7h4zNijQmfniSX6TU1NM",
+      "user_id": "be2d3c60-c8fe-4c46-a9a4-f7bf857924c4",
+      "created_at": "2026-05-27T23:33:55.974493+00:00"
+    }
+  ],
+  "friends": {},
+  "friend_requests": [],
+  "friend_invites": [],
+  "read_state": {},
+  "backup_state": {
+    "last_daily_backup": "2026-05-27"
+  }
+}
