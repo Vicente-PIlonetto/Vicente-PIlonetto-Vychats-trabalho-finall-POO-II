@@ -1,3 +1,4 @@
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -14,7 +15,7 @@ try:
         verify_password,
     )
     from backend.connection_manager import connection_manager
-    from backend.models import (
+    from backend.models.requests import (
         CreateServerRequest,
         FriendInviteAccept,
         FriendRequestCreate,
@@ -25,7 +26,7 @@ try:
         SaveJsonRequest,
         UpdateProfileRequest,
     )
-    from backend.storage import store, utc_now_iso
+    from backend.storage import db
 except ModuleNotFoundError:
     from auth import (
         create_session_token,
@@ -36,7 +37,7 @@ except ModuleNotFoundError:
         verify_password,
     )
     from connection_manager import connection_manager
-    from models import (
+    from models.requests import (
         CreateServerRequest,
         FriendInviteAccept,
         FriendRequestCreate,
@@ -47,7 +48,7 @@ except ModuleNotFoundError:
         SaveJsonRequest,
         UpdateProfileRequest,
     )
-    from storage import store, utc_now_iso
+    from storage import db
 
 
 router = APIRouter(prefix="/api")
@@ -250,7 +251,7 @@ def _resolve_session(authorization: str | None) -> tuple[dict[str, Any], dict[st
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token.")
 
     token = authorization.removeprefix("Bearer ").strip()
-    data = store.read_data()
+    data = db.read_data()
     session = next((item for item in data["sessions"] if item["token"] == token), None)
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session.")
@@ -263,7 +264,7 @@ def _resolve_session(authorization: str | None) -> tuple[dict[str, Any], dict[st
 
 
 async def _save_upload_stream(file: UploadFile, *, category: str, max_size: int) -> dict:
-    meta = store.reserve_media_target(file.filename or "upload", category=category)
+    meta = db.reserve_media_target(file.filename or "upload", category=category)
     target_path = Path(meta["path"])
     size = 0
     try:
@@ -313,19 +314,19 @@ def register(payload: RegisterRequest):
             "display_name": username,
             "status_mode": "online",
             "status_text": "",
-            "created_at": utc_now_iso(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         token = create_session_token()
         session = {
             "token": token,
             "user_id": user["id"],
-            "created_at": utc_now_iso(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         data["users"].append(user)
         data["sessions"].append(session)
         return {"token": token, "user": _public_user(user)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/auth/login")
@@ -345,11 +346,11 @@ def login(payload: LoginRequest):
         data["sessions"].append({
             "token": token,
             "user_id": user["id"],
-            "created_at": utc_now_iso(),
+            "created_at": datetime.now(UTC).isoformat(),
         })
         return {"token": token, "user": _public_user(user)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/auth/google")
@@ -389,7 +390,7 @@ def login_with_google(payload: GoogleAuthRequest):
                 "auth_provider": "google",
                 "status_mode": "online",
                 "status_text": "",
-                "created_at": utc_now_iso(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
             data["users"].append(user)
         else:
@@ -403,11 +404,11 @@ def login_with_google(payload: GoogleAuthRequest):
         data["sessions"].append({
             "token": token,
             "user_id": user["id"],
-            "created_at": utc_now_iso(),
+            "created_at": datetime.now(UTC).isoformat(),
         })
         return {"token": token, "user": _public_user(user)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.get("/session")
@@ -464,7 +465,7 @@ def update_current_user_profile(payload: UpdateProfileRequest, authorization: st
 
         return {"user": _private_user(target)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/users/avatar")
@@ -479,7 +480,7 @@ async def upload_user_avatar(file: UploadFile = File(...), authorization: str | 
         target_user["avatar_url"] = saved["url"]
         return {"user": _private_user(target_user)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/uploads")
@@ -489,7 +490,7 @@ async def upload_chat_attachment(file: UploadFile = File(...), authorization: st
     if file.content_type and file.content_type.startswith("audio/"):
         saved["kind"] = "audio"
         saved["content_type"] = file.content_type
-        saved = store.convert_audio_to_mp3(saved)
+        saved = db.convert_audio_to_mp3(saved)
     return {"attachment": saved}
 
 
@@ -497,7 +498,7 @@ async def upload_chat_attachment(file: UploadFile = File(...), authorization: st
 def save_json_file(payload: SaveJsonRequest, authorization: str | None = Header(default=None)):
     _resolve_session(authorization)
     try:
-        saved_path = store.save_json_document(payload.filename, payload.content)
+        saved_path = db.save_json_document(payload.filename, payload.content)
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     return {
@@ -511,7 +512,7 @@ def save_json_file(payload: SaveJsonRequest, authorization: str | None = Header(
 @router.get("/users")
 def list_users(authorization: str | None = Header(default=None)):
     user, _ = _resolve_session(authorization)
-    data = store.read_data()
+    data = db.read_data()
     online_ids = connection_manager.get_online_user_ids()
     users = [
         _public_user(item, online_ids)
@@ -525,7 +526,7 @@ def list_users(authorization: str | None = Header(default=None)):
 @router.get("/friends")
 def list_friends(authorization: str | None = Header(default=None)):
     user, _ = _resolve_session(authorization)
-    data = store.read_data()
+    data = db.read_data()
     online_ids = connection_manager.get_online_user_ids()
     friends, friend_requests, friend_invites = _ensure_friends_state(data)
     friend_ids = set(_get_friend_ids(friends, user["id"]))
@@ -597,12 +598,12 @@ def create_friend_request(payload: FriendRequestCreate, authorization: str | Non
                 continue
             if {request.get("from_user_id"), request.get("to_user_id")} == {user["id"], other_user["id"]}:
                 request["status"] = "accepted"
-                request["responded_at"] = utc_now_iso()
+                request["responded_at"] = datetime.now(UTC).isoformat()
 
         _add_friendship(friends, user["id"], other_user["id"])
         return {"status": "accepted", "friend": _public_user(other_user)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/friends/requests/{request_id}/accept")
@@ -617,13 +618,13 @@ def accept_friend_request(request_id: str, authorization: str | None = Header(de
         if request.get("to_user_id") != user["id"]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed.")
         request["status"] = "accepted"
-        request["responded_at"] = utc_now_iso()
+        request["responded_at"] = datetime.now(UTC).isoformat()
         other_user_id = request.get("from_user_id")
         _add_friendship(friends, user["id"], other_user_id)
         other_user = next((item for item in data["users"] if item["id"] == other_user_id), None)
         return {"status": "accepted", "friend": _public_user(other_user) if other_user else None}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/friends/requests/{request_id}/decline")
@@ -638,10 +639,10 @@ def decline_friend_request(request_id: str, authorization: str | None = Header(d
         if user["id"] not in {request.get("to_user_id"), request.get("from_user_id")}:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed.")
         request["status"] = "declined"
-        request["responded_at"] = utc_now_iso()
+        request["responded_at"] = datetime.now(UTC).isoformat()
         return {"status": "declined"}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/friends/invites")
@@ -656,11 +657,11 @@ def create_friend_invite(authorization: str | None = Header(default=None)):
             "code": code,
             "from_user_id": user["id"],
             "status": "pending",
-            "created_at": utc_now_iso(),
+            "created_at": datetime.now(UTC).isoformat(),
         })
         return {"code": code}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/friends/invites/accept")
@@ -676,11 +677,11 @@ def accept_friend_invite(payload: FriendInviteAccept, authorization: str | None 
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot accept your own invite.")
         invite["status"] = "accepted"
         invite["claimed_by"] = user["id"]
-        invite["claimed_at"] = utc_now_iso()
+        invite["claimed_at"] = datetime.now(UTC).isoformat()
         _add_friendship(friends, user["id"], invite.get("from_user_id"))
         return {"status": "accepted"}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.delete("/friends/{friend_id}")
@@ -694,13 +695,13 @@ def remove_friend(friend_id: str, authorization: str | None = Header(default=Non
         _remove_friendship(friends, user["id"], friend_id)
         return {"status": "removed"}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.get("/dms")
 def list_direct_messages(authorization: str | None = Header(default=None)):
     user, _ = _resolve_session(authorization)
-    data = store.read_data()
+    data = db.read_data()
     online_ids = connection_manager.get_online_user_ids()
     friends, _, _ = _ensure_friends_state(data)
     friend_ids = set(_get_friend_ids(friends, user["id"]))
@@ -711,7 +712,7 @@ def list_direct_messages(authorization: str | None = Header(default=None)):
         if other_user["id"] not in friend_ids:
             continue
         conversation_id = _dm_conversation_id(user["id"], other_user["id"])
-        messages = store.read_direct_messages(conversation_id)
+        messages = db.read_direct_messages(conversation_id)
         summaries.append(_build_direct_summary(user, other_user, messages, data, online_ids))
     summaries.sort(
         key=lambda item: item["last_message"]["created_at"] if item["last_message"] else "",
@@ -734,7 +735,7 @@ def get_direct_message_thread(other_user_id: str, authorization: str | None = He
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot open a direct message with yourself.")
 
         conversation_id = _dm_conversation_id(user["id"], other_user["id"])
-        messages = store.read_direct_messages(conversation_id)
+        messages = db.read_direct_messages(conversation_id)
         if not _are_friends(friends, user["id"], other_user_id) and not messages:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only message friends.")
         _mark_read(data, user["id"], "dms", other_user_id, messages)
@@ -747,7 +748,7 @@ def get_direct_message_thread(other_user_id: str, authorization: str | None = He
             }
         }
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/dms/{other_user_id}/read")
@@ -762,19 +763,19 @@ def mark_direct_message_thread_read(other_user_id: str, authorization: str | Non
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot open a direct message with yourself.")
 
         conversation_id = _dm_conversation_id(user["id"], other_user["id"])
-        messages = store.read_direct_messages(conversation_id)
+        messages = db.read_direct_messages(conversation_id)
         last_read_at = _mark_read(data, user["id"], "dms", other_user_id, messages)
         return {"status": "ok", "last_read_at": last_read_at, "unread_count": 0}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.get("/servers")
 def list_servers(authorization: str | None = Header(default=None)):
     user, _ = _resolve_session(authorization)
-    data = store.read_data()
+    data = db.read_data()
     servers = [
-        _build_enriched_server_summary(server, user, data, store.read_chat_messages(server["id"]))
+        _build_enriched_server_summary(server, user, data, db.read_chat_messages(server["id"]))
         for server in data["servers"]
         if user["id"] in server["member_ids"]
     ]
@@ -795,22 +796,22 @@ def create_server(payload: CreateServerRequest, authorization: str | None = Head
             "member_ids": [user["id"]],
             "messages": [],
             "password_hash": hash_password(password) if password else "",
-            "created_at": utc_now_iso(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         data["servers"].append(server)
         return {"server": _build_server_summary(server)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.get("/servers/discover")
 def discover_servers(authorization: str | None = Header(default=None)):
     user, _ = _resolve_session(authorization)
-    data = store.read_data()
+    data = db.read_data()
     servers = []
     for server in data["servers"]:
         joined = user["id"] in server["member_ids"]
-        messages = store.read_chat_messages(server["id"]) if joined else []
+        messages = db.read_chat_messages(server["id"]) if joined else []
         servers.append({
             **_build_enriched_server_summary(server, user, data, messages),
             "joined": joined,
@@ -833,7 +834,7 @@ def join_server(server_id: str, payload: JoinServerRequest, authorization: str |
             server["member_ids"].append(user["id"])
         return {"server": _build_server_summary(server)}
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.get("/servers/{server_id}")
@@ -854,7 +855,7 @@ def get_server(server_id: str, authorization: str | None = Header(default=None))
             for user_id in server["member_ids"]
             if user_id in users_by_id
         ]
-        messages = store.read_chat_messages(server_id)
+        messages = db.read_chat_messages(server_id)
         _mark_read(data, user["id"], "servers", server_id, messages)
         return {
             "server": {
@@ -865,7 +866,7 @@ def get_server(server_id: str, authorization: str | None = Header(default=None))
             }
         }
 
-    return store.update(updater)
+    return db.update(updater)
 
 
 @router.post("/servers/{server_id}/read")
@@ -879,8 +880,8 @@ def mark_server_read(server_id: str, authorization: str | None = Header(default=
         if user["id"] not in server["member_ids"]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this server.")
 
-        messages = store.read_chat_messages(server_id)
+        messages = db.read_chat_messages(server_id)
         last_read_at = _mark_read(data, user["id"], "servers", server_id, messages)
         return {"status": "ok", "last_read_at": last_read_at, "unread_count": 0}
 
-    return store.update(updater)
+    return db.update(updater)

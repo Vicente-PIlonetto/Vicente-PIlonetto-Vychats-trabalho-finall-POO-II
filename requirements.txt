@@ -6,3 +6,5 @@ google-auth
 python-multipart
 websockets
 wsproto
+dotenv
+psycopg

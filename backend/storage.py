@@ -1,11 +1,12 @@
 import json
 import os
 import sqlite3
+import psycopg
+from psycopg import sql
 import subprocess
 import shutil
 import sys
 import threading
-import time
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from mimetypes import guess_type
@@ -61,6 +62,9 @@ ATTACHMENTS_DIR = MEDIA_DIR / "attachments"
 class DataStore:
     def __init__(self, db_path: Path = DB_FILE):
         self.db_path = db_path
+        self.conn = psycopg.connect(
+            f"host={os.getenv("DATABASE_HOST")} dbname={os.getenv("DATABASE_DB")} user={os.getenv("DATABASE_USER")} password={os.getenv("DATABASE_PASSWORD")} port={os.getenv("DATABASE_PORT")}"
+        )
         self._lock = threading.RLock()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         CHATS_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,66 +74,43 @@ class DataStore:
         ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self.purge_expired_attachments()
-        self._start_backup_thread()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path, check_same_thread=False)
-        connection.row_factory = sqlite3.Row
-        return connection
+    def _cursor(self):
+        return self.conn.cursor()
 
     def _init_db(self):
-        is_new = not self.db_path.exists()
-        with self._connect() as connection:
-            connection.execute(
+        with self._cursor() as cursor:
+            cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS app_state (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    id SERIAL PRIMARY KEY CHECK (id = 1),
                     data TEXT NOT NULL
                 )
                 """
             )
-            connection.execute(
+            cursor.execute(
+                """
+                insert into app_state values (1, '{"users": [], "sessions": [], "servers": []}') ON CONFLICT DO NOTHING;
+                """
+            )
+            cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS server_messages (
                     server_id TEXT PRIMARY KEY,
                     messages TEXT NOT NULL
                 )
-                """
+            """
             )
-            connection.execute(
+
+            cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS direct_messages (
                     conversation_id TEXT PRIMARY KEY,
                     messages TEXT NOT NULL
                 )
-                """
+            """
             )
-            connection.commit()
-
-            if is_new or not self._state_exists(connection):
-                seed = self._load_seed_state()
-                self._write_state(connection, seed)
-                self._import_message_exports(connection)
-                self._export_json_snapshot(connection)
-            self._maybe_run_daily_backup(connection)
-
-    def _state_exists(self, connection: sqlite3.Connection) -> bool:
-        row = connection.execute("SELECT COUNT(*) AS total FROM app_state").fetchone()
-        return bool(row and row["total"] > 0)
-
-    def _load_seed_state(self) -> dict:
-        if DATA_FILE.exists():
-            with DATA_FILE.open("r", encoding="utf-8") as file:
-                data = json.load(file)
-            return self._normalize_data_shape(data)
-
-        bundled_store = PROJECT_DATA_DIR / "store.json"
-        if bundled_store.exists():
-            with bundled_store.open("r", encoding="utf-8") as file:
-                data = json.load(file)
-            return self._normalize_data_shape(data)
-
-        return deepcopy(DEFAULT_DATA)
+        self.conn.commit()
 
     def _import_message_exports(self, connection: sqlite3.Connection):
         for path in CHATS_DIR.glob("*.json"):
@@ -164,76 +145,6 @@ class DataStore:
 
         connection.commit()
 
-    def _export_json_snapshot(self, connection: sqlite3.Connection):
-        JSON_EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        chat_export_dir = JSON_EXPORTS_DIR / "chats"
-        dm_export_dir = JSON_EXPORTS_DIR / "direct_messages"
-        chat_export_dir.mkdir(parents=True, exist_ok=True)
-        dm_export_dir.mkdir(parents=True, exist_ok=True)
-
-        state = self._read_state(connection)
-        with (JSON_EXPORTS_DIR / "store.json").open("w", encoding="utf-8") as file:
-            json.dump(state, file, indent=2, ensure_ascii=False)
-
-        rows = connection.execute("SELECT server_id, messages FROM server_messages").fetchall()
-        for row in rows:
-            target = chat_export_dir / f"{row['server_id']}.json"
-            with target.open("w", encoding="utf-8") as file:
-                json.dump(json.loads(row["messages"]), file, indent=2, ensure_ascii=False)
-
-        rows = connection.execute("SELECT conversation_id, messages FROM direct_messages").fetchall()
-        for row in rows:
-            target = dm_export_dir / f"{row['conversation_id']}.json"
-            with target.open("w", encoding="utf-8") as file:
-                json.dump(json.loads(row["messages"]), file, indent=2, ensure_ascii=False)
-
-    def _maybe_run_daily_backup(self, connection: sqlite3.Connection):
-        state = self._read_state(connection)
-        backup_state = state.setdefault("backup_state", {})
-        last_backup = str(backup_state.get("last_daily_backup", "") or "")
-        today = datetime.now(UTC).date().isoformat()
-        if last_backup == today:
-            return
-        self._export_daily_backup(connection, today)
-        backup_state["last_daily_backup"] = today
-        self._write_state(connection, state)
-
-    def _export_daily_backup(self, connection: sqlite3.Connection, date_tag: str):
-        daily_dir = JSON_EXPORTS_DIR / "daily" / date_tag
-        chat_export_dir = daily_dir / "chats"
-        dm_export_dir = daily_dir / "direct_messages"
-        chat_export_dir.mkdir(parents=True, exist_ok=True)
-        dm_export_dir.mkdir(parents=True, exist_ok=True)
-
-        state = self._read_state(connection)
-        with (daily_dir / "store.json").open("w", encoding="utf-8") as file:
-            json.dump(state, file, indent=2, ensure_ascii=False)
-
-        rows = connection.execute("SELECT server_id, messages FROM server_messages").fetchall()
-        for row in rows:
-            target = chat_export_dir / f"{row['server_id']}.json"
-            with target.open("w", encoding="utf-8") as file:
-                json.dump(json.loads(row["messages"]), file, indent=2, ensure_ascii=False)
-
-        rows = connection.execute("SELECT conversation_id, messages FROM direct_messages").fetchall()
-        for row in rows:
-            target = dm_export_dir / f"{row['conversation_id']}.json"
-            with target.open("w", encoding="utf-8") as file:
-                json.dump(json.loads(row["messages"]), file, indent=2, ensure_ascii=False)
-
-    def _start_backup_thread(self):
-        thread = threading.Thread(target=self._daily_backup_loop, name="daily-backup", daemon=True)
-        thread.start()
-
-    def _daily_backup_loop(self):
-        while True:
-            try:
-                with self._connect() as connection:
-                    self._maybe_run_daily_backup(connection)
-            except Exception:
-                pass
-            time.sleep(3600)
-
     def _normalize_data_shape(self, data: dict) -> dict:
         data.setdefault("users", [])
         data.setdefault("servers", [])
@@ -266,43 +177,45 @@ class DataStore:
             data["friend_invites"] = []
         return data
 
-    def _read_state(self, connection: sqlite3.Connection) -> dict:
-        row = connection.execute("SELECT data FROM app_state WHERE id = 1").fetchone()
-        if not row:
-            return deepcopy(DEFAULT_DATA)
-        data = json.loads(row["data"])
-        return self._normalize_data_shape(data)
-
-    def _write_state(self, connection: sqlite3.Connection, data: dict):
-        connection.execute(
-            "INSERT OR REPLACE INTO app_state (id, data) VALUES (1, ?)",
-            (json.dumps(data),),
-        )
-        connection.commit()
-
     def read_data(self) -> dict:
-        with self._lock, self._connect() as connection:
-            return deepcopy(self._read_state(connection))
+        with self._cursor() as cursor:
+            data = cursor.execute("SELECT data FROM app_state where id = 1").fetchone()
+            data = json.loads(data[0]) if data != None else ''
+            return data
 
     def update(self, updater):
-        with self._lock, self._connect() as connection:
-            data = self._read_state(connection)
+        with self._cursor() as cursor:
+            data = cursor.execute("SELECT data FROM app_state WHERE id = 1").fetchone()
+            data = json.loads(data[0] if isinstance(data, tuple) else '{}')
             result = updater(data)
-            self._write_state(connection, data)
+            cursor.execute(
+                "UPDATE app_state SET data = %s where id = 1",
+                (json.dumps(data), ),
+            )
             return result
 
-    def _read_messages_row(self, connection: sqlite3.Connection, table: str, key: str, value: str) -> list[dict]:
-        row = connection.execute(
-            f"SELECT messages FROM {table} WHERE {key} = ?",
-            (value,),
-        ).fetchone()
+    def _read_messages_row(
+        self, table: str, key: str, value: str
+    ) -> list[dict]:
+        with self._cursor() as cursor:
+            query = sql.SQL(
+                "SELECT messages FROM {} WHERE {} = %s"
+            ).format(
+                sql.Identifier(table),
+                sql.Identifier(key),
+            )
+
+            row = cursor.execute(query, (value,)).fetchone()
+
         if not row:
             return []
         return json.loads(row["messages"])
 
     def read_chat_messages(self, server_id: str) -> list[dict]:
-        with self._lock, self._connect() as connection:
-            messages = self._read_messages_row(connection, "server_messages", "server_id", server_id)
+        with self._lock, self._cursor() as connection:
+            messages = self._read_messages_row(
+                "server_messages", "server_id", server_id
+            )
             if self._ensure_message_ids(messages):
                 connection.execute(
                     "INSERT OR REPLACE INTO server_messages (server_id, messages) VALUES (?, ?)",
@@ -312,16 +225,20 @@ class DataStore:
             return messages
 
     def write_chat_messages(self, server_id: str, messages: list[dict]):
-        with self._lock, self._connect() as connection:
+        with self._lock, self._cursor() as connection:
             connection.execute(
                 "INSERT OR REPLACE INTO server_messages (server_id, messages) VALUES (?, ?)",
                 (server_id, json.dumps(messages)),
             )
             connection.commit()
 
-    def append_chat_message(self, server_id: str, message: dict, max_messages: int = 100):
-        with self._lock, self._connect() as connection:
-            messages = self._read_messages_row(connection, "server_messages", "server_id", server_id)
+    def append_chat_message(
+        self, server_id: str, message: dict, max_messages: int = 100
+    ):
+        with self._lock, self._cursor() as connection:
+            messages = self._read_messages_row(
+                connection, "server_messages", "server_id", server_id
+            )
             messages.append(message)
             messages = messages[-max_messages:]
             connection.execute(
@@ -330,9 +247,13 @@ class DataStore:
             )
             connection.commit()
 
-    def update_chat_message(self, server_id: str, message_id: str, updater) -> dict | None:
-        with self._lock, self._connect() as connection:
-            messages = self._read_messages_row(connection, "server_messages", "server_id", server_id)
+    def update_chat_message(
+        self, server_id: str, message_id: str, updater
+    ) -> dict | None:
+        with self._lock, self._cursor() as connection:
+            messages = self._read_messages_row(
+                connection, "server_messages", "server_id", server_id
+            )
             for index in range(len(messages) - 1, -1, -1):
                 message = messages[index]
                 if message.get("message_id") != message_id:
@@ -349,8 +270,10 @@ class DataStore:
         return None
 
     def read_direct_messages(self, conversation_id: str) -> list[dict]:
-        with self._lock, self._connect() as connection:
-            messages = self._read_messages_row(connection, "direct_messages", "conversation_id", conversation_id)
+        with self._lock, self._cursor() as connection:
+            messages = self._read_messages_row(
+                connection, "direct_messages", "conversation_id", conversation_id
+            )
             if self._ensure_message_ids(messages):
                 connection.execute(
                     "INSERT OR REPLACE INTO direct_messages (conversation_id, messages) VALUES (?, ?)",
@@ -359,9 +282,13 @@ class DataStore:
                 connection.commit()
             return messages
 
-    def append_direct_message(self, conversation_id: str, message: dict, max_messages: int = 200):
-        with self._lock, self._connect() as connection:
-            messages = self._read_messages_row(connection, "direct_messages", "conversation_id", conversation_id)
+    def append_direct_message(
+        self, conversation_id: str, message: dict, max_messages: int = 200
+    ):
+        with self._lock, self._cursor() as connection:
+            messages = self._read_messages_row(
+                connection, "direct_messages", "conversation_id", conversation_id
+            )
             messages.append(message)
             messages = messages[-max_messages:]
             connection.execute(
@@ -370,9 +297,13 @@ class DataStore:
             )
             connection.commit()
 
-    def update_direct_message(self, conversation_id: str, message_id: str, updater) -> dict | None:
-        with self._lock, self._connect() as connection:
-            messages = self._read_messages_row(connection, "direct_messages", "conversation_id", conversation_id)
+    def update_direct_message(
+        self, conversation_id: str, message_id: str, updater
+    ) -> dict | None:
+        with self._lock, self._cursor() as connection:
+            messages = self._read_messages_row(
+                connection, "direct_messages", "conversation_id", conversation_id
+            )
             for index in range(len(messages) - 1, -1, -1):
                 message = messages[index]
                 if message.get("message_id") != message_id:
@@ -389,7 +320,11 @@ class DataStore:
         return None
 
     def save_json_document(self, filename: str, content: object) -> Path:
-        safe_name = "".join(char for char in filename.strip() if char.isalnum() or char in {"-", "_", "."}).strip("._")
+        safe_name = "".join(
+            char
+            for char in filename.strip()
+            if char.isalnum() or char in {"-", "_", "."}
+        ).strip("._")
         if not safe_name:
             raise ValueError("Filename must contain at least one valid character.")
         if not safe_name.endswith(".json"):
@@ -409,7 +344,11 @@ class DataStore:
         return "file"
 
     def _build_media_target(self, filename: str, *, category: str) -> dict:
-        safe_name = "".join(char for char in filename.strip() if char.isalnum() or char in {"-", "_", "."}).strip("._")
+        safe_name = "".join(
+            char
+            for char in filename.strip()
+            if char.isalnum() or char in {"-", "_", "."}
+        ).strip("._")
         if not safe_name:
             safe_name = "upload"
         extension = Path(safe_name).suffix.lower()
@@ -466,7 +405,12 @@ class DataStore:
             str(output_path),
         ]
         try:
-            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                command,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         except Exception:
             output_path.unlink(missing_ok=True)
             return meta
@@ -499,17 +443,25 @@ class DataStore:
         return True
 
     def reset_runtime_data(self):
-        with self._lock, self._connect() as connection:
+        with self._lock, self._cursor() as connection:
             self._write_state(connection, deepcopy(DEFAULT_DATA))
             connection.execute("DELETE FROM server_messages")
             connection.execute("DELETE FROM direct_messages")
             connection.commit()
-            for directory in (CHATS_DIR, DIRECT_MESSAGES_DIR, JSON_EXPORTS_DIR, AVATARS_DIR, ATTACHMENTS_DIR):
+            for directory in (
+                CHATS_DIR,
+                DIRECT_MESSAGES_DIR,
+                JSON_EXPORTS_DIR,
+                AVATARS_DIR,
+                ATTACHMENTS_DIR,
+            ):
                 for path in directory.iterdir():
                     if path.is_file():
                         path.unlink()
 
-    def purge_expired_attachments(self, *, max_age_days: int = ATTACHMENT_RETENTION_DAYS):
+    def purge_expired_attachments(
+        self, *, max_age_days: int = ATTACHMENT_RETENTION_DAYS
+    ):
         cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
         with self._lock:
             expired_urls = set()
@@ -525,9 +477,14 @@ class DataStore:
             if not expired_urls:
                 return
 
-            with self._connect() as connection:
-                for table, key in (("server_messages", "server_id"), ("direct_messages", "conversation_id")):
-                    rows = connection.execute(f"SELECT {key}, messages FROM {table}").fetchall()
+            with self._cursor() as connection:
+                for table, key in (
+                    ("server_messages", "server_id"),
+                    ("direct_messages", "conversation_id"),
+                ):
+                    rows = connection.execute(
+                        f"SELECT {key}, messages FROM {table}"
+                    ).fetchall()
                     for row in rows:
                         messages = json.loads(row["messages"])
                         changed = False
@@ -537,12 +494,20 @@ class DataStore:
                             if isinstance(attachment, dict):
                                 attachments = [attachment]
                             elif isinstance(message.get("attachments"), list):
-                                attachments = [item for item in message.get("attachments") if isinstance(item, dict)]
+                                attachments = [
+                                    item
+                                    for item in message.get("attachments")
+                                    if isinstance(item, dict)
+                                ]
 
                             if not attachments:
                                 continue
 
-                            kept = [item for item in attachments if item.get("url") not in expired_urls]
+                            kept = [
+                                item
+                                for item in attachments
+                                if item.get("url") not in expired_urls
+                            ]
                             if kept == attachments:
                                 continue
 
@@ -575,8 +540,4 @@ class DataStore:
         return changed
 
 
-def utc_now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-store = DataStore()
+db = DataStore()

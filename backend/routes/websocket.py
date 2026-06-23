@@ -12,10 +12,10 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 
 try:
     from backend.connection_manager import connection_manager
-    from backend.storage import store
+    from backend.storage import db
 except ModuleNotFoundError:
     from connection_manager import connection_manager
-    from storage import store
+    from storage import db
 
 
 router = APIRouter()
@@ -28,7 +28,7 @@ def _utc_now_iso() -> str:
 
 
 def _resolve_socket_access(token: str, server_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    data = store.read_data()
+    data = db.read_data()
     session = next((item for item in data["sessions"] if item["token"] == token), None)
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session.")
@@ -47,7 +47,7 @@ def _resolve_socket_access(token: str, server_id: str) -> tuple[dict[str, Any], 
 
 
 def _resolve_user_from_token(token: str) -> dict[str, Any]:
-    data = store.read_data()
+    data = db.read_data()
     session = next((item for item in data["sessions"] if item["token"] == token), None)
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session.")
@@ -59,7 +59,7 @@ def _resolve_user_from_token(token: str) -> dict[str, Any]:
 
 
 def _append_server_message(server_id: str, message: dict[str, Any]):
-    store.append_chat_message(server_id, message, max_messages=MAX_SERVER_MESSAGES)
+    db.append_chat_message(server_id, message, max_messages=MAX_SERVER_MESSAGES)
 
 
 def _dm_conversation_id(user_a_id: str, user_b_id: str) -> str:
@@ -67,7 +67,7 @@ def _dm_conversation_id(user_a_id: str, user_b_id: str) -> str:
 
 
 def _resolve_direct_socket_access(token: str, other_user_id: str) -> tuple[dict[str, Any], dict[str, Any], str]:
-    data = store.read_data()
+    data = db.read_data()
     session = next((item for item in data["sessions"] if item["token"] == token), None)
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session.")
@@ -86,7 +86,7 @@ def _resolve_direct_socket_access(token: str, other_user_id: str) -> tuple[dict[
 
 
 def _append_direct_message(conversation_id: str, message: dict[str, Any]):
-    store.append_direct_message(conversation_id, message, max_messages=200)
+    db.append_direct_message(conversation_id, message, max_messages=200)
 
 
 def _build_message_record(
@@ -199,7 +199,7 @@ async def direct_message_websocket_endpoint(websocket: WebSocket, other_user_id:
                         next_content = str(parsed_payload.get("content", "")).strip()
                         if not message_id or not next_content:
                             continue
-                        updated = store.update_direct_message(
+                        updated = db.update_direct_message(
                             conversation_id,
                             message_id,
                             lambda message: _apply_message_edit(message, user["id"], next_content),
@@ -222,7 +222,7 @@ async def direct_message_websocket_endpoint(websocket: WebSocket, other_user_id:
                         message_id = str(parsed_payload.get("message_id", "")).strip()
                         if not message_id:
                             continue
-                        updated = store.update_direct_message(
+                        updated = db.update_direct_message(
                             conversation_id,
                             message_id,
                             lambda message: _apply_message_delete(message, user["id"]),
@@ -245,7 +245,7 @@ async def direct_message_websocket_endpoint(websocket: WebSocket, other_user_id:
                         if not message_id:
                             continue
                         removed: list[list[dict[str, Any]] | None] = []
-                        updated = store.update_direct_message(
+                        updated = db.update_direct_message(
                             conversation_id,
                             message_id,
                             lambda message: removed.append(_remove_message_attachments(message, user["id"])) or (removed[-1] is not None),
@@ -256,7 +256,7 @@ async def direct_message_websocket_endpoint(websocket: WebSocket, other_user_id:
                             if not batch:
                                 continue
                             for item in batch:
-                                store.delete_attachment_by_url(item.get("url", ""))
+                                db.delete_attachment_by_url(item.get("url", ""))
                         await manager.broadcast(
                             f"dm:{conversation_id}",
                             json.dumps(
@@ -281,7 +281,7 @@ async def direct_message_websocket_endpoint(websocket: WebSocket, other_user_id:
 
             reply_to = None
             if isinstance(parsed_payload, dict):
-                messages = store.read_direct_messages(conversation_id)
+                messages = db.read_direct_messages(conversation_id)
                 reply_to = _resolve_reply_summary(messages, reply_to_id)
 
             normalized_attachments = None
@@ -366,7 +366,7 @@ async def websocket_endpoint(websocket: WebSocket, server_id: str, token: str = 
                         next_content = str(parsed_payload.get("content", "")).strip()
                         if not message_id or not next_content:
                             continue
-                        updated = store.update_chat_message(
+                        updated = db.update_chat_message(
                             server_id,
                             message_id,
                             lambda message: _apply_message_edit(message, user["id"], next_content),
@@ -389,7 +389,7 @@ async def websocket_endpoint(websocket: WebSocket, server_id: str, token: str = 
                         message_id = str(parsed_payload.get("message_id", "")).strip()
                         if not message_id:
                             continue
-                        updated = store.update_chat_message(
+                        updated = db.update_chat_message(
                             server_id,
                             message_id,
                             lambda message: _apply_message_delete(message, user["id"]),
@@ -412,7 +412,7 @@ async def websocket_endpoint(websocket: WebSocket, server_id: str, token: str = 
                         if not message_id:
                             continue
                         removed: list[list[dict[str, Any]] | None] = []
-                        updated = store.update_chat_message(
+                        updated = db.update_chat_message(
                             server_id,
                             message_id,
                             lambda message: removed.append(_remove_message_attachments(message, user["id"])) or (removed[-1] is not None),
@@ -423,7 +423,7 @@ async def websocket_endpoint(websocket: WebSocket, server_id: str, token: str = 
                             if not batch:
                                 continue
                             for item in batch:
-                                store.delete_attachment_by_url(item.get("url", ""))
+                                db.delete_attachment_by_url(item.get("url", ""))
                         await manager.broadcast(
                             server_id,
                             json.dumps(
@@ -448,7 +448,7 @@ async def websocket_endpoint(websocket: WebSocket, server_id: str, token: str = 
 
             reply_to = None
             if isinstance(parsed_payload, dict):
-                messages = store.read_chat_messages(server_id)
+                messages = db.read_chat_messages(server_id)
                 reply_to = _resolve_reply_summary(messages, reply_to_id)
 
             normalized_attachments = None

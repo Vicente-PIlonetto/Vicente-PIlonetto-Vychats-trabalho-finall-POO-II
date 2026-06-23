@@ -13,6 +13,10 @@ import re
 import uvicorn
 
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 DEFAULT_CONFIG = {
     "host": "0.0.0.0",
     "port": 8000,
@@ -451,7 +455,8 @@ def main():
     while True:
         render_menu(config)
         try:
-            choice = input("Choose an option: ").strip()
+            # choice = input("Choose an option: ").strip()
+            choice = "1"
         except (KeyboardInterrupt, EOFError):
             print("\nExiting Cipherline.")
             break
